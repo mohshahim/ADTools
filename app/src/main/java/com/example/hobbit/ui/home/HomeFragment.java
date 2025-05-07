@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -13,14 +14,10 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.hobbit.R;
+import com.google.firebase.firestore.CollectionReference;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,21 +28,8 @@ public class HomeFragment extends Fragment {
     private List<Habits> habitList;
     private EditText editTextHabit;
 
-    private String loadJSONFromAsset(String filename) {
-        String json = null;
-        try {
-            InputStream is = getContext().getAssets().open(filename);
-            int size = is.available();
-            byte[] buffer = new byte[size];
-            is.read(buffer);
-            is.close();
-            json = new String(buffer, StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-        return json;
-    }
-
+    private FirebaseFirestore db;
+    private CollectionReference habitsRef;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
@@ -55,33 +39,44 @@ public class HomeFragment extends Fragment {
         editTextHabit = root.findViewById(R.id.editTextHabit);
         Button buttonAddHabit = root.findViewById(R.id.buttonAddHabit);
 
+        db = FirebaseFirestore.getInstance();
+        habitsRef = db.collection("habits");
+
         habitList = new ArrayList<>();
-
-        // Load JSON habits from assets
-        String jsonString = loadJSONFromAsset("habits.json");
-
-        try {
-            JSONArray jsonArray = new JSONArray(jsonString);
-            for (int i = 0; i < jsonArray.length(); i++) {
-                JSONObject obj = jsonArray.getJSONObject(i);
-                String habitName = obj.getString("name");
-                habitList.add(new Habits(habitName));
-            }
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
         adapter = new HabitAdapter(habitList);
 
         recyclerViewHabits.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerViewHabits.setAdapter(adapter);
 
+        // Real-time listener
+        habitsRef.addSnapshotListener((value, error) -> {
+            if (error != null || value == null) return;
+
+            habitList.clear();
+            for (QueryDocumentSnapshot doc : value) {
+                String name = doc.getString("name");
+                if (name != null) {
+                    habitList.add(new Habits(name));
+                }
+            }
+            adapter.notifyDataSetChanged();
+        });
+
         buttonAddHabit.setOnClickListener(v -> {
             String habitName = editTextHabit.getText().toString().trim();
             if (!habitName.isEmpty()) {
-                habitList.add(new Habits(habitName));
-                adapter.notifyItemInserted(habitList.size() - 1);
-                editTextHabit.setText("");
+                Habits newHabit = new Habits(habitName);
+
+                habitsRef.add(newHabit)
+                        .addOnSuccessListener(documentReference -> {
+                            editTextHabit.setText("");
+                            Toast.makeText(getContext(), "Habit added to Firestore", Toast.LENGTH_SHORT).show();
+                        })
+                        .addOnFailureListener(e -> {
+                            Toast.makeText(getContext(), "Failed to add: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        });
+            } else {
+                Toast.makeText(getContext(), "Please enter a habit", Toast.LENGTH_SHORT).show();
             }
         });
 

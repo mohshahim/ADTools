@@ -12,13 +12,22 @@ import androidx.navigation.ui.NavigationUI;
 
 import com.example.hobbit.databinding.ActivityMainBinding;
 
+import com.google.firebase.FirebaseApp;
+
+
+
+
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
 
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        FirebaseApp.initializeApp(this);
         super.onCreate(savedInstanceState);
+
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
